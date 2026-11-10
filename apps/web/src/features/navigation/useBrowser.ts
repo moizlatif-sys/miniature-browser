@@ -17,8 +17,10 @@ export type GoMethod = Exclude<VisitMethod, 'back' | 'forward'>;
  * Each person has an independent stack. `owner` says whose stack is loaded,
  * so a late response for one person can never land in another's.
  */
-export function useBrowser(personId: string | null) {
+export function useBrowser(personId: string | null, onArrive: (personId: string, entry: Entry, method: VisitMethod) => void) {
   const [nav, dispatch] = useReducer(navReducer, emptyNav);
+  const onArriveRef = useRef(onArrive);
+  onArriveRef.current = onArrive;
   const [owner, setOwner] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +73,10 @@ export function useBrowser(personId: string | null) {
 
   // ---- intentions
 
-  const push = useCallback((entry: Entry, _method: VisitMethod) => {
+  /** Commits the entry first, then reports the arrival. A failed report never undoes the page. */
+  const push = useCallback((entry: Entry, method: VisitMethod) => {
     dispatch({ type: 'push', entry });
+    if (ownerRef.current) onArriveRef.current(ownerRef.current, entry, method);
   }, []);
 
   const go = useCallback(
@@ -134,6 +138,9 @@ export function useBrowser(personId: string | null) {
       setError(null);
       setNotice(null);
       dispatch({ type: 'move', delta });
+      // Returning to a page is a fresh arrival at it.
+      const destination = state.entries[state.index + delta];
+      if (ownerRef.current) onArriveRef.current(ownerRef.current, destination, delta === -1 ? 'back' : 'forward');
     },
     [cancelPending],
   );

@@ -1,4 +1,12 @@
-import type { Person, SiteView } from './types';
+import type { Person, SiteView, VisitMethod, VisitPage, VisitView } from './types';
+
+export interface VisitInput {
+  eventId: string;
+  personId: string;
+  address: string;
+  method: VisitMethod;
+  navigationEntryId: string;
+}
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
@@ -47,4 +55,10 @@ export const api = {
   people: () => apiFetch<Person[]>('/people'),
   site: (address: string, signal?: AbortSignal) =>
     apiFetch<SiteView>(`/sites/${encodeURIComponent(address)}`, { signal }),
+  recordVisit: (visit: VisitInput) => apiFetch<VisitView>('/visits', { method: 'POST', body: JSON.stringify(visit) }),
+  visits: (personId: string, cursor: string | null, signal?: AbortSignal) =>
+    apiFetch<VisitPage>(
+      `/people/${encodeURIComponent(personId)}/visits?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      { signal },
+    ),
 };

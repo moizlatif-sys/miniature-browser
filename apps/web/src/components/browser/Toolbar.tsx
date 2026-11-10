@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import type { Person } from '@/lib/api/types';
 
 interface Props {
@@ -14,10 +14,13 @@ interface Props {
   committedValue: string;
   onSubmit: (value: string) => void;
   loading: boolean;
+  /** Panel toggle buttons. */
+  actions?: ReactNode;
 }
 
 export function Toolbar(props: Props) {
-  const { canBack, canForward, onBack, onForward, people, personId, onPersonChange, committedValue, onSubmit, loading } = props;
+  const { canBack, canForward, onBack, onForward, people, personId, onPersonChange, committedValue, onSubmit, loading, actions } =
+    props;
   // What is being typed is a draft; it only becomes navigation on Enter.
   const [draft, setDraft] = useState(committedValue);
   useEffect(() => setDraft(committedValue), [committedValue]);
@@ -56,6 +59,8 @@ export function Toolbar(props: Props) {
           {loading ? 'Loading…' : 'Go'}
         </button>
       </form>
+
+      <div className="panel-toggles">{actions}</div>
 
       <label className="person-picker">
         <span>Browsing as</span>
