@@ -12,6 +12,7 @@ interface Props {
   onNavigate: (target: string) => void;
   onBlocked: (target: string) => void;
   onScroll: (y: number) => void;
+  onKeyNav: (action: 'back' | 'forward') => void;
 }
 
 /**
@@ -19,13 +20,13 @@ interface Props {
  * Mount a fresh PageFrame (via `key`) for every navigation entry, so each
  * frame instance has its own id and late messages from old frames are ignored.
  */
-export function PageFrame({ title, safeHtml, restoreY, fragment, onNavigate, onBlocked, onScroll }: Props) {
+export function PageFrame({ title, safeHtml, restoreY, fragment, onNavigate, onBlocked, onScroll, onKeyNav }: Props) {
   const iframe = useRef<HTMLIFrameElement>(null);
   const [{ frameId, nonce }] = useState(() => ({ frameId: randomHex(), nonce: randomHex() }));
   // Restore target is fixed at mount; later scroll updates must not re-trigger it.
   const [initial] = useState(() => ({ restoreY, fragment }));
-  const handlers = useRef({ onNavigate, onBlocked, onScroll });
-  handlers.current = { onNavigate, onBlocked, onScroll };
+  const handlers = useRef({ onNavigate, onBlocked, onScroll, onKeyNav });
+  handlers.current = { onNavigate, onBlocked, onScroll, onKeyNav };
 
   const srcDoc = useMemo(() => buildFrameDocument(safeHtml, frameId, nonce), [safeHtml, frameId, nonce]);
 
@@ -55,6 +56,9 @@ export function PageFrame({ title, safeHtml, restoreY, fragment, onNavigate, onB
           break;
         case 'blocked':
           handlers.current.onBlocked(msg.target);
+          break;
+        case 'key':
+          handlers.current.onKeyNav(msg.action);
           break;
       }
     }

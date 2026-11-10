@@ -28,6 +28,8 @@ export function useBrowser(
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** The navigation that failed in transport, so the error banner can retry it. */
+  const [failed, setFailed] = useState<{ input: string; method: GoMethod } | null>(null);
 
   const navRef = useRef(nav);
   navRef.current = nav;
@@ -69,6 +71,7 @@ export function useBrowser(
     cancelPending();
     flushSave();
     setError(null);
+    setFailed(null);
     setNotice(null);
     dispatch({ type: 'load', state: loadNav(personId) });
     setOwner(personId);
@@ -99,6 +102,7 @@ export function useBrowser(
       if (!forPerson) return;
       const target = parseTarget(input);
       setNotice(null);
+      setFailed(null);
 
       if (target.kind === 'invalid') return setError(target.reason);
       setError(null);
@@ -137,8 +141,9 @@ export function useBrowser(
         if (target.kind === 'address' && err instanceof ApiError && err.code === 'SITE_NOT_FOUND') {
           push({ id: crypto.randomUUID(), kind: 'missing', address: target.address, scrollY: null }, method);
         } else {
-          // The server or network failed: keep the current page and say so.
+          // The server or network failed: keep the current page, say so, and offer a retry.
           setError(err instanceof Error ? err.message : 'Something went wrong.');
+          setFailed({ input, method });
         }
       } finally {
         if (stillCurrent()) {
@@ -156,6 +161,7 @@ export function useBrowser(
       if (delta === -1 ? !canGoBack(state) : !canGoForward(state)) return;
       cancelPending();
       setError(null);
+      setFailed(null);
       setNotice(null);
       dispatch({ type: 'move', delta });
       // Returning to a page is a fresh arrival at it.
@@ -187,7 +193,11 @@ export function useBrowser(
     forward,
     blocked,
     reportScroll,
-    dismissError: () => setError(null),
+    retry: failed ? () => void go(failed.input, failed.method) : null,
+    dismissError: () => {
+      setError(null);
+      setFailed(null);
+    },
     dismissNotice: () => setNotice(null),
   };
 }

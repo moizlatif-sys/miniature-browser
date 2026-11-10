@@ -31,6 +31,8 @@ export function HistoryPanel({ personId, personName, version, onOpen, onClose }:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const request = useRef(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
 
   const load = useCallback(
     async (from: string | null) => {
@@ -64,7 +66,7 @@ export function HistoryPanel({ personId, personName, version, onOpen, onClose }:
   return (
     <aside className="side-panel" aria-labelledby="history-title">
       <div className="side-panel-head">
-        <h2 id="history-title">History · {personName}</h2>
+        <h2 id="history-title" ref={heading} tabIndex={-1}>History · {personName}</h2>
         <button type="button" className="btn" onClick={onClose}>
           Close
         </button>

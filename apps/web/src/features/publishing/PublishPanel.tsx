@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api/client';
 import type { Person } from '@/lib/api/types';
 
@@ -32,6 +32,8 @@ export function PublishPanel({ people, defaultAuthorId, suggestedAddress, onOpen
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
 
   useEffect(() => {
     if (suggestedAddress) setAddress(suggestedAddress);
@@ -80,7 +82,9 @@ export function PublishPanel({ people, defaultAuthorId, suggestedAddress, onOpen
   return (
     <aside className="side-panel publish-panel" aria-labelledby="publish-title">
       <div className="side-panel-head">
-        <h2 id="publish-title">Publish a page</h2>
+        <h2 id="publish-title" ref={heading} tabIndex={-1}>
+          Publish a page
+        </h2>
         <button type="button" className="btn" onClick={onClose}>
           Close
         </button>

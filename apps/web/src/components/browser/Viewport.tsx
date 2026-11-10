@@ -12,9 +12,10 @@ interface Props {
   onPublishHere: (address: string) => void;
   onBlocked: (target: string) => void;
   onScroll: (entryId: string, y: number) => void;
+  onKeyNav: (action: 'back' | 'forward') => void;
 }
 
-export function Viewport({ entry, loading, onNavigate, onOpenResult, onPublishHere, onBlocked, onScroll }: Props) {
+export function Viewport({ entry, loading, onNavigate, onOpenResult, onPublishHere, onBlocked, onScroll, onKeyNav }: Props) {
   return (
     <main className="viewport" aria-busy={!!loading}>
       {loading && <div className="loading-bar" role="status">Loading {loading}…</div>}
@@ -42,6 +43,7 @@ export function Viewport({ entry, loading, onNavigate, onOpenResult, onPublishHe
           onNavigate={onNavigate}
           onBlocked={onBlocked}
           onScroll={(y) => onScroll(entry.id, y)}
+          onKeyNav={onKeyNav}
         />
       )}
     </main>

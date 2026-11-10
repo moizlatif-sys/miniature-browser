@@ -347,18 +347,22 @@ These decisions were made while building, to keep the code small and easy to rea
 ### Concrete choices
 
 - **Versions:** Next.js 16 (App Router) and React 19; NestJS 11 with Mongoose 8; TypeScript 5.9. These are pinned exact in `package.json` so the lockfile is reproducible.
-- **Sanitizer:** `sanitize-html`, configured with explicit tag, attribute, scheme, and inline-style allowlists in `apps/api/src/html-policy/html-policy.ts`. The same policy also extracts the searchable text.
-- **Config:** `@nestjs/config` loads `apps/api/.env` when present. Every value has a working local default, so `.env` files are optional.
-- **No Docker fallback:** `docker-compose.yml` is the documented way to run MongoDB. Any MongoDB 6+ on `127.0.0.1:27017` works the same way.
+- **Sanitizer:** `sanitize-html`, configured with explicit tag, attribute, scheme, and inline-style allowlists in `apps/api/src/html-policy/html-policy.ts`. Searchable text is extracted from the sanitized output with `htmlparser2`, which decodes entities and spaces block elements apart.
+- **Config:** `@nestjs/config` (API) and `dotenv` (seed) load `apps/api/.env` when present. Every value has a working local default, so `.env` files are optional.
+- **MongoDB:** `docker-compose.yml` is the documented way to run it. Any MongoDB 6+ on `127.0.0.1:27017` works the same way.
 
-### Simplifications
+### How the pieces actually work
 
-- **Links are rewritten at publish time.** An `<a href="garden.zz#pond">` is stored as `<a data-mb-href="garden.zz#pond">` with no `href`. External, `javascript:`, and invalid targets become `<a data-mb-blocked="…">`. Because no stored anchor has a usable `href`, modifier clicks, middle clicks, and "open in new tab" have nothing to open.
+- **Omnibox.** The address bar accepts an address (`garden.zz`, `garden.zz#beds`), a same-page fragment (`#beds`), or anything else, which becomes a search. Text that looks like a broken address (it ends in `.zz` or has a scheme) gets an "is not an address" error instead of being searched.
+- **Links are rewritten at publish time.** An `<a href="garden.zz#pond">` is stored as `<a data-mb-href="garden.zz#pond">` with no `href`. External, `javascript:`, and invalid targets become `<a data-mb-blocked="…">`, which shows a notice when clicked. Because no stored anchor has a usable `href`, modifier clicks, middle clicks, and "open in new tab" have nothing to open.
+- **Policy versioning.** `HTML_POLICY_VERSION` is stored on every site. On API start, every site with an older version is re-sanitized from its stored source, so nothing stale is ever rendered or searched.
 - **Visits are always resolved server-side.** Sites cannot be edited in this scope, so the current title equals the snapshot title. `originalVisitId` is not needed and is left out of navigation entries.
-- **One navigation module.** `apps/web/src/features/navigation/` holds a pure reducer (`reducer.ts`), session persistence (`storage.ts`), and one controller hook (`useBrowser.ts`). Components only call the hook's intentions: `go`, `search`, `back`, `forward`, `openHistory`, and so on.
-- **Scroll capture is push-based.** The iframe bridge reports scroll position, throttled, and the parent keeps the latest value per entry. There is no request/response capture round trip, so navigation never waits on the frame. The last throttled value is at most about 150 ms stale.
-- **Search uses an escaped, case-insensitive regex** over `title` and `bodyText`, capped at 200 query characters. Ranking happens in the service: title matches first, then address.
-- **Visit retries:** a failed visit write keeps its `eventId` in an in-memory queue and shows a "History not saved, retry" notice. Because the event ID is unique, a retry can never create a duplicate.
+- **One navigation module.** `apps/web/src/features/navigation/` holds a pure reducer (`reducer.ts`), session persistence (`storage.ts`), and one controller hook (`useBrowser.ts`). Components only call its intentions: `go(input, method)`, `back`, `forward`, `retry`, `reportScroll`, `blocked`.
+- **Scroll capture is push-based.** The bridge reports scroll position at most every 150 ms, and every link click carries the exact current position. So navigation never waits on a request/response round trip with the frame. The only window for loss is scrolling and then pressing the toolbar's Back within 150 ms.
+- **Fragments.** Same-page moves (`#beds`) are new entries over the same snapshot. They remount the frame, which scrolls to the target with `getElementById`, and they record a visit like any other arrival.
+- **Search** runs two bounded, escaped, case-insensitive queries: title matches first, then body-only matches, each sorted by address. Substring matching means `light` also finds "slightly". That is accepted at this scale.
+- **Visit retries:** a failed visit write keeps its `eventId` and shows a "History not saved, Retry" notice. Because the event ID is unique, a retry can never create a duplicate.
+- **Keyboard:** Alt+←/→ work from the toolbar and from inside a page frame, which forwards them through the bridge as a validated `key` message. Escape closes a panel and returns focus to the address bar.
 
 ### File map (where to look later)
 
@@ -366,7 +370,36 @@ These decisions were made while building, to keep the code small and easy to rea
 | --- | --- |
 | Address rules | `apps/api/src/common/address.ts` (mirrored in `apps/web/src/lib/address.ts`) |
 | HTML policy (what authors may write) | `apps/api/src/html-policy/html-policy.ts` |
-| Iframe document, CSP, and trusted bridge | `apps/web/src/lib/renderer/frame-document.ts` |
-| Parent-side message validation | `apps/web/src/components/browser/PageFrame.tsx` |
+| Iframe document, CSP, trusted bridge, message validation | `apps/web/src/lib/renderer/frame-document.ts` |
+| Parent-side frame handling (source and frame-id checks) | `apps/web/src/components/browser/PageFrame.tsx` |
 | Back/forward/truncation logic | `apps/web/src/features/navigation/reducer.ts` |
-| Seed data | `apps/api/src/seed/seed-data.ts` |
+| Request lifecycle, per-person stacks | `apps/web/src/features/navigation/useBrowser.ts` |
+| Visit writes and retry | `apps/web/src/features/history/useVisitRecorder.ts` |
+| Search ranking and excerpts | `apps/api/src/search/search.service.ts` |
+| Publishing rules | `apps/api/src/sites/sites.service.ts` (`create`) |
+| Seed data and link graph | `apps/api/src/seed/seed-data.ts` |
+
+## 16. Recording script
+
+This is a walk that the seed data supports exactly. Pick **Juno Park** (the person who has been nearly everywhere).
+
+1. **Trail four deep.** Type `start.zz`. Click *The Tidepool Log*, scroll down a little, then click *old light*, then *Night Radio*.
+2. **Back and forward.** Press Back twice. Tidepool comes back at the scroll position you left. Press Forward once to reach the lighthouse. Say: "Back and forward only move a cursor over stored snapshots; nothing is refetched."
+3. **Lose forward.** From the lighthouse, go Back to tidepool, then click *a collection of found things* (driftwood). Forward is now disabled: the lighthouse/night-radio branch is gone, as in every browser.
+4. **Search.** Type `fold`. It matches three pages by body text only. Scroll the results, open *mapmaker.zz*, then press Back. The same results come back at the same scroll, and the query is not rerun.
+5. **History.** Open History. It shows the seeded hour plus everything you just did, each with how you arrived. Click an older entry to jump there.
+6. **Publish.** Open Publish, then Insert example. Add `<script>alert(1)</script>` and `<a href="https://example.com">out</a>`, then publish at `my-corner.zz`. Open the page: the script is gone and the external link is greyed out with a notice.
+7. **Nowhere.** On tidepool, click *seaglass.zz* (a broken link), or type `nowhere.zz`. "Nothing here" appears and is recorded in history as such.
+8. **Explain** while showing `html-policy.ts` and `frame-document.ts`:
+   - The model: entries plus a cursor, and visits as server-resolved facts.
+   - The two walls: the sanitizer, then a sandbox with no `allow-same-origin` plus a CSP that allows only the bridge by nonce.
+   - What authors lose: scripts, forms, images and other media, arbitrary CSS, and external links.
+   - What was left out (section 17).
+
+## 17. Deliberately left out
+
+- Editing or deleting pages, accounts, and proof that a publisher is who they picked.
+- Images and any other asset hosting. Pages are text and structure only.
+- Syncing with the host browser's own back button and URL. The in-app toolbar is authoritative.
+- Indexed full-text search and stemming. Substring search is enough for hundreds of pages.
+- Automated tests, per the project owner's instruction. Behaviour was checked by driving the running app in a headless browser during development.

@@ -18,7 +18,8 @@ export type FrameMessage =
   | { type: 'ready' }
   | { type: 'scroll'; y: number }
   | { type: 'navigate'; target: string; y: number }
-  | { type: 'blocked'; target: string };
+  | { type: 'blocked'; target: string }
+  | { type: 'key'; action: 'back' | 'forward' };
 
 export interface RestoreMessage {
   type: 'restore';
@@ -89,6 +90,12 @@ function bridgeScript(frameId: string): string {
   }, true);
   document.addEventListener("auxclick", function (e) { if (linkOf(e.target)) e.preventDefault(); }, true);
   document.addEventListener("keydown", function (e) {
+    // Alt+Left/Right go back/forward even while the page has focus.
+    if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      send({ type: "key", action: e.key === "ArrowLeft" ? "back" : "forward" });
+      return;
+    }
     if (e.key !== "Enter") return;
     var a = linkOf(e.target);
     if (a) { e.preventDefault(); follow(a); }
@@ -136,6 +143,8 @@ export function readFrameMessage(data: unknown, frameId: string): FrameMessage |
       return okTarget && okY ? { type: 'navigate', target: d.target as string, y: d.y as number } : null;
     case 'blocked':
       return okTarget ? { type: 'blocked', target: d.target as string } : null;
+    case 'key':
+      return d.action === 'back' || d.action === 'forward' ? { type: 'key', action: d.action } : null;
     default:
       return null;
   }

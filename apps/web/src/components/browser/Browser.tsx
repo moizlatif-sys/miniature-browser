@@ -76,6 +76,24 @@ export function Browser() {
   const person = people.find((p) => p.id === personId);
   const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p));
 
+  // The tab title follows the page, like a real browser.
+  const pageTitle = entry?.kind === 'site' ? entry.site.title : entry?.kind === 'search' ? `“${entry.query}”` : entry?.address;
+  useEffect(() => {
+    document.title = pageTitle ? `${pageTitle} · Miniature Browser` : 'Miniature Browser';
+  }, [pageTitle]);
+
+  // Escape closes the open panel and puts focus back on the address bar.
+  useEffect(() => {
+    if (!panel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setPanel(null);
+      document.getElementById('address')?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [panel]);
+
   return (
     <div className="browser">
       <Toolbar
@@ -103,9 +121,16 @@ export function Browser() {
       {(browser.error || peopleError) && (
         <div className="notice notice-error" role="alert">
           <span>{browser.error ?? peopleError}</span>
-          <button type="button" className="link-button" onClick={browser.dismissError}>
-            Dismiss
-          </button>
+          <span className="notice-actions">
+            {(browser.retry || peopleError) && (
+              <button type="button" className="link-button" onClick={browser.retry ?? (() => window.location.reload())}>
+                Retry
+              </button>
+            )}
+            <button type="button" className="link-button" onClick={browser.dismissError}>
+              Dismiss
+            </button>
+          </span>
         </div>
       )}
       {browser.notice && (
@@ -135,6 +160,7 @@ export function Browser() {
             setPanel('publish');
           }}
           onBlocked={browser.blocked}
+          onKeyNav={(action) => (action === 'back' ? back() : forward())}
           onScroll={browser.reportScroll}
         />
         {panel === 'history' && person && (
