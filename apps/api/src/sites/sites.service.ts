@@ -1,8 +1,9 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ApiError, invalidInput } from '../common/api-error';
 import { isValidAddress, normalizeAddress } from '../common/address';
+import { HTML_POLICY_VERSION, prepareHtml } from '../html-policy/html-policy';
 import { Person } from '../people/person.schema';
 import { Site } from './site.schema';
 
@@ -28,8 +29,29 @@ export function requireAddress(raw: unknown, field = 'address'): string {
 }
 
 @Injectable()
-export class SitesService {
+export class SitesService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(SitesService.name);
+
   constructor(@InjectModel(Site.name) private readonly sites: Model<Site>) {}
+
+  /**
+   * Pages stored under an older HTML policy are re-sanitized from their
+   * source before the API serves anything, so a policy change can never
+   * leave stale markup being rendered or searched.
+   */
+  async onApplicationBootstrap() {
+    const stale = await this.sites
+      .find({ sanitizerVersion: { $lt: HTML_POLICY_VERSION } })
+      .select('+sourceHtml');
+    for (const site of stale) {
+      const prepared = prepareHtml(site.sourceHtml);
+      site.safeHtml = prepared.safeHtml;
+      site.bodyText = prepared.bodyText;
+      site.sanitizerVersion = prepared.version;
+      await site.save();
+    }
+    if (stale.length) this.logger.log(`Reprocessed ${stale.length} page(s) with HTML policy v${HTML_POLICY_VERSION}`);
+  }
 
   /** Light lookup used to resolve visits: returns null when nothing lives there. */
   async findMeta(address: string): Promise<{ id: Types.ObjectId; title: string } | null> {

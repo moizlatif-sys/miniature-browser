@@ -1,26 +1,33 @@
 'use client';
 
 import type { Page } from '@/features/navigation/useBrowser';
+import { PageFrame } from './PageFrame';
 
 interface Props {
   page: Page | null;
   loading: string | null;
   onNavigate: (input: string) => void;
+  onBlocked: (target: string) => void;
+  onScroll: (y: number) => void;
 }
 
-export function Viewport({ page, loading, onNavigate }: Props) {
+export function Viewport({ page, loading, onNavigate, onBlocked, onScroll }: Props) {
   return (
     <main className="viewport" aria-busy={!!loading}>
       {loading && <div className="loading-bar" role="status">Loading {loading}…</div>}
       {!page && <StartScreen onNavigate={onNavigate} />}
       {page?.kind === 'missing' && <MissingPage address={page.address} />}
       {page?.kind === 'site' && (
-        <article className="placeholder-page">
-          <h1>{page.site.title}</h1>
-          <p className="muted">by {page.site.author.name}</p>
-          {/* Shown as text until the containment layer renders it in a sandbox. */}
-          <pre>{page.site.safeHtml}</pre>
-        </article>
+        <PageFrame
+          key={page.id}
+          title={page.site.title}
+          safeHtml={page.site.safeHtml}
+          restoreY={null}
+          fragment={page.fragment}
+          onNavigate={onNavigate}
+          onBlocked={onBlocked}
+          onScroll={onScroll}
+        />
       )}
     </main>
   );

@@ -6,8 +6,8 @@ import type { SiteView } from '@/lib/api/types';
 import { parseTarget } from '@/lib/address';
 
 export type Page =
-  | { kind: 'site'; address: string; fragment: string | null; site: SiteView }
-  | { kind: 'missing'; address: string };
+  | { id: string; kind: 'site'; address: string; fragment: string | null; site: SiteView }
+  | { id: string; kind: 'missing'; address: string };
 
 /**
  * Browser controller. For now it only knows the current page; the
@@ -17,36 +17,65 @@ export function useBrowser() {
   const [page, setPage] = useState<Page | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const scrollY = useRef(0);
 
-  const go = useCallback(async (input: string) => {
-    const target = parseTarget(input);
-    if (target.kind === 'invalid') return setError(target.reason);
-    if (target.kind !== 'address') return setError('Search is not available yet.');
-
-    controller.current?.abort();
-    const abort = (controller.current = new AbortController());
-    const id = ++requestId.current;
-    setLoading(target.address);
-    setError(null);
-
-    try {
-      const site = await api.site(target.address, abort.signal);
-      if (id !== requestId.current) return;
-      setPage({ kind: 'site', address: site.address, fragment: target.fragment, site });
-    } catch (err) {
-      if (isAbort(err) || id !== requestId.current) return;
-      if (err instanceof ApiError && err.code === 'SITE_NOT_FOUND') {
-        setPage({ kind: 'missing', address: target.address });
-      } else {
-        // Transport or server failure: keep the current page, offer a retry.
-        setError(err instanceof Error ? err.message : 'Something went wrong.');
+  const go = useCallback(
+    async (input: string) => {
+      const target = parseTarget(input);
+      setNotice(null);
+      if (target.kind === 'invalid') return setError(target.reason);
+      if (target.kind === 'search') return setError('Search is not available yet.');
+      if (target.kind === 'fragment') {
+        // Same page, different place: a new view of the snapshot we already have.
+        if (page?.kind === 'site') setPage({ ...page, id: crypto.randomUUID(), fragment: target.fragment });
+        return;
       }
-    } finally {
-      if (id === requestId.current) setLoading(null);
-    }
+
+      controller.current?.abort();
+      const abort = (controller.current = new AbortController());
+      const id = ++requestId.current;
+      setLoading(target.address);
+      setError(null);
+
+      try {
+        const site = await api.site(target.address, abort.signal);
+        if (id !== requestId.current) return;
+        setPage({ id: crypto.randomUUID(), kind: 'site', address: site.address, fragment: target.fragment, site });
+      } catch (err) {
+        if (isAbort(err) || id !== requestId.current) return;
+        if (err instanceof ApiError && err.code === 'SITE_NOT_FOUND') {
+          setPage({ id: crypto.randomUUID(), kind: 'missing', address: target.address });
+        } else {
+          // Transport or server failure: keep the current page, offer a retry.
+          setError(err instanceof Error ? err.message : 'Something went wrong.');
+        }
+      } finally {
+        if (id === requestId.current) setLoading(null);
+      }
+    },
+    [page],
+  );
+
+  const blocked = useCallback((target: string) => {
+    setNotice(`That link leads outside this web (${target.slice(0, 80)}), so it was not followed.`);
   }, []);
 
-  return { page, loading, error, go, dismissError: () => setError(null) };
+  const reportScroll = useCallback((y: number) => {
+    scrollY.current = y;
+  }, []);
+
+  return {
+    page,
+    loading,
+    error,
+    notice,
+    go,
+    blocked,
+    reportScroll,
+    dismissError: () => setError(null),
+    dismissNotice: () => setNotice(null),
+  };
 }

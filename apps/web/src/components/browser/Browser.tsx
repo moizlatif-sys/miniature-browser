@@ -45,8 +45,22 @@ export function Browser() {
           </button>
         </div>
       )}
+      {browser.notice && (
+        <div className="notice notice-warn" role="status">
+          <span>{browser.notice}</span>
+          <button type="button" className="link-button" onClick={browser.dismissNotice}>
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="workspace">
-        <Viewport page={page} loading={browser.loading} onNavigate={browser.go} />
+        <Viewport
+          page={page}
+          loading={browser.loading}
+          onNavigate={browser.go}
+          onBlocked={browser.blocked}
+          onScroll={browser.reportScroll}
+        />
       </div>
     </div>
   );
