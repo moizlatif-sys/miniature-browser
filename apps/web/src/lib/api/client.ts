@@ -1,4 +1,4 @@
-import type { Person, SiteView, VisitMethod, VisitPage, VisitView } from './types';
+import type { Person, SearchResponse, SiteView, VisitMethod, VisitPage, VisitView } from './types';
 
 export interface VisitInput {
   eventId: string;
@@ -55,6 +55,8 @@ export const api = {
   people: () => apiFetch<Person[]>('/people'),
   site: (address: string, signal?: AbortSignal) =>
     apiFetch<SiteView>(`/sites/${encodeURIComponent(address)}`, { signal }),
+  search: (q: string, signal?: AbortSignal) =>
+    apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}&limit=20`, { signal }),
   recordVisit: (visit: VisitInput) => apiFetch<VisitView>('/visits', { method: 'POST', body: JSON.stringify(visit) }),
   visits: (personId: string, cursor: string | null, signal?: AbortSignal) =>
     apiFetch<VisitPage>(

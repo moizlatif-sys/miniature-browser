@@ -77,8 +77,10 @@ function isNavState(v: unknown): v is NavState {
 function isEntry(e: unknown): e is Entry {
   if (typeof e !== 'object' || e === null) return false;
   const x = e as Record<string, unknown>;
-  if (typeof x.id !== 'string' || typeof x.address !== 'string') return false;
+  if (typeof x.id !== 'string') return false;
   if (x.scrollY !== null && typeof x.scrollY !== 'number') return false;
+  if (x.kind === 'search') return typeof x.query === 'string' && Array.isArray(x.results);
+  if (typeof x.address !== 'string') return false;
   if (x.kind === 'missing') return true;
   if (x.kind !== 'site') return false;
   const site = x.site as Record<string, unknown> | undefined;

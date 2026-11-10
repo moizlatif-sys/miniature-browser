@@ -1,4 +1,4 @@
-import type { SiteView } from '@/lib/api/types';
+import type { SearchResult, SiteView } from '@/lib/api/types';
 
 /**
  * The browser's back/forward model: a list of entries and a cursor.
@@ -16,7 +16,12 @@ import type { SiteView } from '@/lib/api/types';
 
 export type Entry =
   | { id: string; kind: 'site'; address: string; fragment: string | null; site: SiteView; scrollY: number | null }
-  | { id: string; kind: 'missing'; address: string; scrollY: number | null };
+  | { id: string; kind: 'missing'; address: string; scrollY: number | null }
+  /** A results page keeps the results it showed, so going back to it never reruns the query. */
+  | { id: string; kind: 'search'; query: string; results: SearchResult[]; truncated: boolean; scrollY: number | null };
+
+/** Entries that are arrivals at an address (and so become visits). */
+export type PageEntry = Exclude<Entry, { kind: 'search' }>;
 
 export interface NavState {
   entries: Entry[];

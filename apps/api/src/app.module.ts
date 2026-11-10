@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { mongoUri } from './config';
 import { HealthController } from './health.controller';
 import { PeopleModule } from './people/people.module';
+import { SearchModule } from './search/search.module';
 import { SitesModule } from './sites/sites.module';
 import { VisitsModule } from './visits/visits.module';
 
@@ -19,6 +20,7 @@ import { VisitsModule } from './visits/visits.module';
     PeopleModule,
     SitesModule,
     VisitsModule,
+    SearchModule,
   ],
   controllers: [HealthController],
 })

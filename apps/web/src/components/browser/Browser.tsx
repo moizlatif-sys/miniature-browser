@@ -5,7 +5,7 @@ import { api } from '@/lib/api/client';
 import type { Person } from '@/lib/api/types';
 import { displayTarget } from '@/lib/address';
 import { useBrowser } from '@/features/navigation/useBrowser';
-import type { Entry } from '@/features/navigation/reducer';
+import type { PageEntry } from '@/features/navigation/reducer';
 import { loadPersonId, savePersonId } from '@/features/navigation/storage';
 import { HistoryPanel } from '@/features/history/HistoryPanel';
 import { useVisitRecorder } from '@/features/history/useVisitRecorder';
@@ -24,7 +24,7 @@ export function Browser() {
 
   const recorder = useVisitRecorder(useCallback(() => setHistoryVersion((v) => v + 1), []));
   const onArrive = useCallback(
-    (forPerson: string, entry: Entry, method: VisitMethod) => {
+    (forPerson: string, entry: PageEntry, method: VisitMethod) => {
       void recorder.record({
         eventId: crypto.randomUUID(),
         personId: forPerson,
@@ -66,7 +66,11 @@ export function Browser() {
   }, [back, forward]);
 
   const entry = browser.ready ? browser.entry : null;
-  const committedValue = entry ? displayTarget(entry.address, entry.kind === 'site' ? entry.fragment : null) : '';
+  const committedValue = !entry
+    ? ''
+    : entry.kind === 'search'
+      ? entry.query
+      : displayTarget(entry.address, entry.kind === 'site' ? entry.fragment : null);
   const person = people.find((p) => p.id === personId);
   const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p));
 
@@ -118,6 +122,7 @@ export function Browser() {
           entry={entry}
           loading={browser.loading}
           onNavigate={(target) => browser.go(target, 'link')}
+          onOpenResult={(address) => browser.go(address, 'search_result')}
           onBlocked={browser.blocked}
           onScroll={browser.reportScroll}
         />

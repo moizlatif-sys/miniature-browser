@@ -1,22 +1,35 @@
 'use client';
 
 import type { Entry } from '@/features/navigation/reducer';
+import { SearchResults } from '@/features/search/SearchResults';
 import { PageFrame } from './PageFrame';
 
 interface Props {
   entry: Entry | null;
   loading: string | null;
   onNavigate: (input: string) => void;
+  onOpenResult: (address: string) => void;
   onBlocked: (target: string) => void;
   onScroll: (entryId: string, y: number) => void;
 }
 
-export function Viewport({ entry, loading, onNavigate, onBlocked, onScroll }: Props) {
+export function Viewport({ entry, loading, onNavigate, onOpenResult, onBlocked, onScroll }: Props) {
   return (
     <main className="viewport" aria-busy={!!loading}>
       {loading && <div className="loading-bar" role="status">Loading {loading}…</div>}
       {!entry && <StartScreen onNavigate={onNavigate} />}
       {entry?.kind === 'missing' && <MissingPage address={entry.address} />}
+      {entry?.kind === 'search' && (
+        <SearchResults
+          key={entry.id}
+          query={entry.query}
+          results={entry.results}
+          truncated={entry.truncated}
+          restoreY={entry.scrollY}
+          onOpen={onOpenResult}
+          onScroll={(y) => onScroll(entry.id, y)}
+        />
+      )}
       {entry?.kind === 'site' && (
         <PageFrame
           // A new frame per entry: going back mounts a fresh frame and restores its saved scroll.

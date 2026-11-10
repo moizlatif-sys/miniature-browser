@@ -4,7 +4,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { api, ApiError, isAbort } from '@/lib/api/client';
 import type { VisitMethod } from '@/lib/api/types';
 import { parseTarget } from '@/lib/address';
-import { canGoBack, canGoForward, currentEntry, emptyNav, type Entry, navReducer } from './reducer';
+import { canGoBack, canGoForward, currentEntry, emptyNav, type Entry, navReducer, type PageEntry } from './reducer';
 import { loadNav, saveNav } from './storage';
 
 /** How a new destination was asked for. Back and forward have their own functions. */
@@ -17,7 +17,10 @@ export type GoMethod = Exclude<VisitMethod, 'back' | 'forward'>;
  * Each person has an independent stack. `owner` says whose stack is loaded,
  * so a late response for one person can never land in another's.
  */
-export function useBrowser(personId: string | null, onArrive: (personId: string, entry: Entry, method: VisitMethod) => void) {
+export function useBrowser(
+  personId: string | null,
+  onArrive: (personId: string, entry: PageEntry, method: VisitMethod) => void,
+) {
   const [nav, dispatch] = useReducer(navReducer, emptyNav);
   const onArriveRef = useRef(onArrive);
   onArriveRef.current = onArrive;
@@ -73,11 +76,22 @@ export function useBrowser(personId: string | null, onArrive: (personId: string,
 
   // ---- intentions
 
-  /** Commits the entry first, then reports the arrival. A failed report never undoes the page. */
-  const push = useCallback((entry: Entry, method: VisitMethod) => {
-    dispatch({ type: 'push', entry });
-    if (ownerRef.current) onArriveRef.current(ownerRef.current, entry, method);
+  /**
+   * Commits the entry first, then reports the arrival. A failed report never
+   * undoes the page. Search results are part of back/forward but are not
+   * visits to a site, so they are not recorded in history.
+   */
+  const arrive = useCallback((entry: Entry, method: VisitMethod) => {
+    if (entry.kind !== 'search' && ownerRef.current) onArriveRef.current(ownerRef.current, entry, method);
   }, []);
+
+  const push = useCallback(
+    (entry: Entry, method: VisitMethod) => {
+      dispatch({ type: 'push', entry });
+      arrive(entry, method);
+    },
+    [arrive],
+  );
 
   const go = useCallback(
     async (input: string, method: GoMethod = 'typed') => {
@@ -87,7 +101,6 @@ export function useBrowser(personId: string | null, onArrive: (personId: string,
       setNotice(null);
 
       if (target.kind === 'invalid') return setError(target.reason);
-      if (target.kind === 'search') return setError('Search is not available yet.');
       setError(null);
 
       if (target.kind === 'fragment') {
@@ -102,10 +115,17 @@ export function useBrowser(personId: string | null, onArrive: (personId: string,
       cancelPending();
       const abort = (controller.current = new AbortController());
       const id = requestId.current;
-      setLoading(target.address);
+      setLoading(target.kind === 'search' ? `results for “${target.query}”` : target.address);
       const stillCurrent = () => id === requestId.current && ownerRef.current === forPerson;
 
       try {
+        if (target.kind === 'search') {
+          // Every submitted search fetches fresh results, including newly published pages.
+          const res = await api.search(target.query, abort.signal);
+          if (!stillCurrent()) return;
+          push({ id: crypto.randomUUID(), kind: 'search', query: res.query, results: res.results, truncated: res.truncated, scrollY: null }, method);
+          return;
+        }
         const site = await api.site(target.address, abort.signal);
         if (!stillCurrent()) return;
         push(
@@ -114,7 +134,7 @@ export function useBrowser(personId: string | null, onArrive: (personId: string,
         );
       } catch (err) {
         if (isAbort(err) || !stillCurrent()) return;
-        if (err instanceof ApiError && err.code === 'SITE_NOT_FOUND') {
+        if (target.kind === 'address' && err instanceof ApiError && err.code === 'SITE_NOT_FOUND') {
           push({ id: crypto.randomUUID(), kind: 'missing', address: target.address, scrollY: null }, method);
         } else {
           // The server or network failed: keep the current page and say so.
@@ -139,10 +159,9 @@ export function useBrowser(personId: string | null, onArrive: (personId: string,
       setNotice(null);
       dispatch({ type: 'move', delta });
       // Returning to a page is a fresh arrival at it.
-      const destination = state.entries[state.index + delta];
-      if (ownerRef.current) onArriveRef.current(ownerRef.current, destination, delta === -1 ? 'back' : 'forward');
+      arrive(state.entries[state.index + delta], delta === -1 ? 'back' : 'forward');
     },
-    [cancelPending],
+    [cancelPending, arrive],
   );
   const back = useCallback(() => move(-1), [move]);
   const forward = useCallback(() => move(1), [move]);
