@@ -55,6 +55,8 @@ export const api = {
   people: () => apiFetch<Person[]>('/people'),
   site: (address: string, signal?: AbortSignal) =>
     apiFetch<SiteView>(`/sites/${encodeURIComponent(address)}`, { signal }),
+  publish: (input: { address: string; title: string; authorId: string; html: string }) =>
+    apiFetch<SiteView>('/sites', { method: 'POST', body: JSON.stringify(input) }),
   search: (q: string, signal?: AbortSignal) =>
     apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}&limit=20`, { signal }),
   recordVisit: (visit: VisitInput) => apiFetch<VisitView>('/visits', { method: 'POST', body: JSON.stringify(visit) }),

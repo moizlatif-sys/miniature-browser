@@ -1,4 +1,5 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { CreateSiteDto } from './create-site.dto';
 import { SitesService } from './sites.service';
 
 @Controller('sites')
@@ -8,5 +9,10 @@ export class SitesController {
   @Get(':address')
   get(@Param('address') address: string) {
     return this.sites.getByAddress(address);
+  }
+
+  @Post()
+  create(@Body() dto: CreateSiteDto) {
+    return this.sites.create(dto);
   }
 }

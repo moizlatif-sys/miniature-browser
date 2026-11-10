@@ -6,7 +6,9 @@ import { ApiExceptionFilter } from './common/api-exception.filter';
 import { createValidationPipe } from './common/validation.pipe';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  // Pages are capped at 100 KiB of HTML; JSON escaping can roughly double that.
+  app.useBodyParser('json', { limit: '256kb' });
   app.setGlobalPrefix('api');
   app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' });
   app.useGlobalPipes(createValidationPipe());

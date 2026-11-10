@@ -33,6 +33,17 @@ export class ApiExceptionFilter implements ExceptionFilter {
         body: { code: CODE_BY_STATUS[status] ?? 'ERROR', message: exception.message },
       };
     }
+    // Body-parser errors (too large, malformed JSON) carry their own 4xx status.
+    const status = (exception as { status?: unknown })?.status;
+    if (typeof status === 'number' && status >= 400 && status < 500) {
+      return {
+        status,
+        body: {
+          code: CODE_BY_STATUS[status] ?? 'INVALID_INPUT',
+          message: status === 413 ? 'The request is too large.' : 'The request could not be read.',
+        },
+      };
+    }
     // Mongo driver/Mongoose connection problems: tell the client to retry later,
     // never pretend the page does not exist.
     const name = exception instanceof Error ? exception.name : '';

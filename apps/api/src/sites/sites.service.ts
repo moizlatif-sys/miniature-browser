@@ -1,11 +1,16 @@
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ApiError, invalidInput } from '../common/api-error';
+import { ApiError, FieldErrors, invalidInput } from '../common/api-error';
 import { isValidAddress, normalizeAddress } from '../common/address';
-import { HTML_POLICY_VERSION, prepareHtml } from '../html-policy/html-policy';
+import { HTML_POLICY_VERSION, prepareHtml, PreparedHtml } from '../html-policy/html-policy';
+import { PeopleService } from '../people/people.service';
 import { Person } from '../people/person.schema';
+import { CreateSiteDto } from './create-site.dto';
 import { Site } from './site.schema';
+
+export const MAX_TITLE = 120;
+export const MAX_HTML_BYTES = 100 * 1024;
 
 export interface SiteView {
   id: string;
@@ -32,7 +37,67 @@ export function requireAddress(raw: unknown, field = 'address'): string {
 export class SitesService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SitesService.name);
 
-  constructor(@InjectModel(Site.name) private readonly sites: Model<Site>) {}
+  constructor(
+    @InjectModel(Site.name) private readonly sites: Model<Site>,
+    private readonly people: PeopleService,
+  ) {}
+
+  /**
+   * Publishes a page. All field problems are reported together. The unique
+   * index on `address` is what makes "first one wins" atomic; there is no
+   * check-then-insert race to lose.
+   */
+  async create(dto: CreateSiteDto): Promise<SiteView> {
+    const errors: FieldErrors = {};
+
+    const address = normalizeAddress(dto.address);
+    if (!isValidAddress(address)) errors.address = 'Use a name like garden.zz: letters, digits and hyphens, ending in .zz.';
+
+    const title = dto.title.replace(/\s+/g, ' ').trim();
+    if (title.length < 1 || title.length > MAX_TITLE) errors.title = `Give the page a title of 1–${MAX_TITLE} characters.`;
+
+    const bytes = Buffer.byteLength(dto.html, 'utf8');
+    let prepared: PreparedHtml | null = null;
+    if (bytes > MAX_HTML_BYTES) {
+      errors.html = `The page is ${Math.ceil(bytes / 1024)} KiB; the limit is ${MAX_HTML_BYTES / 1024} KiB.`;
+    } else {
+      prepared = prepareHtml(dto.html);
+      if (!prepared.bodyText) errors.html = 'Nothing readable is left after removing unsupported HTML. Add some text.';
+    }
+
+    const authorId = new Types.ObjectId(dto.authorId);
+    const author = await this.people.find(authorId);
+    if (!author) errors.authorId = 'No such person.';
+
+    if (Object.keys(errors).length || !prepared || !author) throw invalidInput(errors);
+
+    try {
+      const site = await this.sites.create({
+        address,
+        title,
+        authorId,
+        sourceHtml: dto.html,
+        safeHtml: prepared.safeHtml,
+        bodyText: prepared.bodyText,
+        sanitizerVersion: prepared.version,
+      });
+      return {
+        id: String(site._id),
+        address: site.address,
+        title: site.title,
+        author,
+        safeHtml: site.safeHtml,
+        updatedAt: (site.updatedAt ?? new Date()).toISOString(),
+      };
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000) {
+        throw new ApiError(HttpStatus.CONFLICT, 'ADDRESS_TAKEN', `Someone has already published at ${address}.`, {
+          address: `${address} is taken. Pick another name.`,
+        });
+      }
+      throw err;
+    }
+  }
 
   /**
    * Pages stored under an older HTML policy are re-sanitized from their

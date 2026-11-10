@@ -9,17 +9,19 @@ import type { PageEntry } from '@/features/navigation/reducer';
 import { loadPersonId, savePersonId } from '@/features/navigation/storage';
 import { HistoryPanel } from '@/features/history/HistoryPanel';
 import { useVisitRecorder } from '@/features/history/useVisitRecorder';
+import { PublishPanel } from '@/features/publishing/PublishPanel';
 import type { VisitMethod } from '@/lib/api/types';
 import { Toolbar } from './Toolbar';
 import { Viewport } from './Viewport';
 
-type Panel = 'history' | null;
+type Panel = 'history' | 'publish' | null;
 
 export function Browser() {
   const [people, setPeople] = useState<Person[]>([]);
   const [personId, setPersonId] = useState<string | null>(null);
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
+  const [publishAddress, setPublishAddress] = useState('');
   const [historyVersion, setHistoryVersion] = useState(0);
 
   const recorder = useVisitRecorder(useCallback(() => setHistoryVersion((v) => v + 1), []));
@@ -88,9 +90,14 @@ export function Browser() {
         onSubmit={(value) => browser.go(value, 'typed')}
         loading={!!browser.loading}
         actions={
-          <button type="button" className="btn" aria-pressed={panel === 'history'} onClick={() => toggle('history')}>
-            History
-          </button>
+          <>
+            <button type="button" className="btn" aria-pressed={panel === 'history'} onClick={() => toggle('history')}>
+              History
+            </button>
+            <button type="button" className="btn" aria-pressed={panel === 'publish'} onClick={() => toggle('publish')}>
+              Publish
+            </button>
+          </>
         }
       />
       {(browser.error || peopleError) && (
@@ -123,6 +130,10 @@ export function Browser() {
           loading={browser.loading}
           onNavigate={(target) => browser.go(target, 'link')}
           onOpenResult={(address) => browser.go(address, 'search_result')}
+          onPublishHere={(address) => {
+            setPublishAddress(address);
+            setPanel('publish');
+          }}
           onBlocked={browser.blocked}
           onScroll={browser.reportScroll}
         />
@@ -132,6 +143,16 @@ export function Browser() {
             personName={person.name}
             version={historyVersion}
             onOpen={(address) => browser.go(address, 'history')}
+            onClose={() => setPanel(null)}
+          />
+        )}
+        {panel === 'publish' && (
+          <PublishPanel
+            people={people}
+            defaultAuthorId={personId}
+            suggestedAddress={publishAddress}
+            // Opening a published page is an ordinary navigation; publishing alone records no visit.
+            onOpen={(address) => browser.go(address, 'typed')}
             onClose={() => setPanel(null)}
           />
         )}

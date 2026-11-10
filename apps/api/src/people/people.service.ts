@@ -18,10 +18,15 @@ export class PeopleService {
     return rows.map((p) => ({ id: String(p._id), name: p.name }));
   }
 
+  async find(id: Types.ObjectId): Promise<PersonView | null> {
+    const person = await this.people.findById(id).lean();
+    return person ? { id: String(person._id), name: person.name } : null;
+  }
+
   /** Throws a field error if the person does not exist. People are never created implicitly. */
   async require(id: Types.ObjectId, field: string): Promise<PersonView> {
-    const person = await this.people.findById(id).lean();
+    const person = await this.find(id);
     if (!person) throw invalidInput({ [field]: 'No such person.' });
-    return { id: String(person._id), name: person.name };
+    return person;
   }
 }
