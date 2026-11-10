@@ -1,0 +1,17 @@
+{
+  "name": "miniature-browser",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d mongo",
+    "db:down": "docker compose down",
+    "dev:api": "npm run dev -w api",
+    "dev:web": "npm run dev -w web",
+    "seed": "npm run seed -w api",
+    "build": "npm run build -w api && npm run build -w web",
+    "typecheck": "npm run typecheck -w api && npm run typecheck -w web"
+  }
+}
