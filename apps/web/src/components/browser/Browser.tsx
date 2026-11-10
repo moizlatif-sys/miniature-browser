@@ -5,6 +5,7 @@ import { api } from '@/lib/api/client';
 import type { Person } from '@/lib/api/types';
 import { displayTarget } from '@/lib/address';
 import { useBrowser } from '@/features/navigation/useBrowser';
+import { loadPersonId, savePersonId } from '@/features/navigation/storage';
 import { Toolbar } from './Toolbar';
 import { Viewport } from './Viewport';
 
@@ -12,29 +13,51 @@ export function Browser() {
   const [people, setPeople] = useState<Person[]>([]);
   const [personId, setPersonId] = useState<string | null>(null);
   const [peopleError, setPeopleError] = useState<string | null>(null);
-  const browser = useBrowser();
+  const browser = useBrowser(personId);
 
   useEffect(() => {
     api
       .people()
       .then((list) => {
         setPeople(list);
-        setPersonId((current) => current ?? list[0]?.id ?? null);
+        const remembered = loadPersonId();
+        setPersonId(list.find((p) => p.id === remembered)?.id ?? list[0]?.id ?? null);
       })
       .catch((err: Error) => setPeopleError(err.message));
   }, []);
 
-  const page = browser.page;
-  const committedValue = page ? displayTarget(page.address, page.kind === 'site' ? page.fragment : null) : '';
+  const choosePerson = (id: string) => {
+    savePersonId(id);
+    setPersonId(id);
+  };
+
+  // Alt+← / Alt+→ like a real browser (only reaches us when focus is outside the page frame).
+  const { back, forward } = browser;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); forward(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [back, forward]);
+
+  const entry = browser.ready ? browser.entry : null;
+  const committedValue = entry ? displayTarget(entry.address, entry.kind === 'site' ? entry.fragment : null) : '';
 
   return (
     <div className="browser">
       <Toolbar
+        canBack={browser.canBack}
+        canForward={browser.canForward}
+        onBack={back}
+        onForward={forward}
         people={people}
         personId={personId}
-        onPersonChange={setPersonId}
+        onPersonChange={choosePerson}
         committedValue={committedValue}
-        onSubmit={browser.go}
+        onSubmit={(value) => browser.go(value, 'typed')}
         loading={!!browser.loading}
       />
       {(browser.error || peopleError) && (
@@ -55,9 +78,9 @@ export function Browser() {
       )}
       <div className="workspace">
         <Viewport
-          page={page}
+          entry={entry}
           loading={browser.loading}
-          onNavigate={browser.go}
+          onNavigate={(target) => browser.go(target, 'link')}
           onBlocked={browser.blocked}
           onScroll={browser.reportScroll}
         />

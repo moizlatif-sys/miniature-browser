@@ -50,6 +50,7 @@ export function PageFrame({ title, safeHtml, restoreY, fragment, onNavigate, onB
           handlers.current.onScroll(msg.y);
           break;
         case 'navigate':
+          handlers.current.onScroll(msg.y);
           handlers.current.onNavigate(msg.target);
           break;
         case 'blocked':

@@ -17,7 +17,7 @@
 export type FrameMessage =
   | { type: 'ready' }
   | { type: 'scroll'; y: number }
-  | { type: 'navigate'; target: string }
+  | { type: 'navigate'; target: string; y: number }
   | { type: 'blocked'; target: string };
 
 export interface RestoreMessage {
@@ -77,7 +77,8 @@ function bridgeScript(frameId: string): string {
   function linkOf(node) { return node && node.closest ? node.closest("a") : null; }
   function follow(a) {
     var href = a.getAttribute("data-mb-href");
-    if (href) send({ type: "navigate", target: href });
+    // Carry the exact scroll position, so leaving never loses it to the throttle below.
+    if (href) send({ type: "navigate", target: href, y: Math.round(window.scrollY) });
     else send({ type: "blocked", target: a.getAttribute("data-mb-blocked") || "" });
   }
   document.addEventListener("click", function (e) {
@@ -125,15 +126,14 @@ export function readFrameMessage(data: unknown, frameId: string): FrameMessage |
   const d = data as Record<string, unknown>;
   if (d.frameId !== frameId) return null;
   const okTarget = typeof d.target === 'string' && d.target.length <= 200;
+  const okY = typeof d.y === 'number' && Number.isFinite(d.y) && d.y >= 0 && d.y < 10_000_000;
   switch (d.type) {
     case 'ready':
       return { type: 'ready' };
     case 'scroll':
-      return typeof d.y === 'number' && Number.isFinite(d.y) && d.y >= 0 && d.y < 10_000_000
-        ? { type: 'scroll', y: d.y }
-        : null;
+      return okY ? { type: 'scroll', y: d.y as number } : null;
     case 'navigate':
-      return okTarget ? { type: 'navigate', target: d.target as string } : null;
+      return okTarget && okY ? { type: 'navigate', target: d.target as string, y: d.y as number } : null;
     case 'blocked':
       return okTarget ? { type: 'blocked', target: d.target as string } : null;
     default:

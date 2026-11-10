@@ -4,6 +4,10 @@ import { FormEvent, useEffect, useState } from 'react';
 import type { Person } from '@/lib/api/types';
 
 interface Props {
+  canBack: boolean;
+  canForward: boolean;
+  onBack: () => void;
+  onForward: () => void;
   people: Person[];
   personId: string | null;
   onPersonChange: (id: string) => void;
@@ -12,7 +16,8 @@ interface Props {
   loading: boolean;
 }
 
-export function Toolbar({ people, personId, onPersonChange, committedValue, onSubmit, loading }: Props) {
+export function Toolbar(props: Props) {
+  const { canBack, canForward, onBack, onForward, people, personId, onPersonChange, committedValue, onSubmit, loading } = props;
   // What is being typed is a draft; it only becomes navigation on Enter.
   const [draft, setDraft] = useState(committedValue);
   useEffect(() => setDraft(committedValue), [committedValue]);
@@ -24,6 +29,14 @@ export function Toolbar({ people, personId, onPersonChange, committedValue, onSu
 
   return (
     <header className="toolbar">
+      <div className="nav-buttons">
+        <button type="button" className="btn btn-icon" onClick={onBack} disabled={!canBack} aria-label="Back" title="Back (Alt+←)">
+          ←
+        </button>
+        <button type="button" className="btn btn-icon" onClick={onForward} disabled={!canForward} aria-label="Forward" title="Forward (Alt+→)">
+          →
+        </button>
+      </div>
       <form className="address-form" onSubmit={submit} role="search">
         <label htmlFor="address" className="visually-hidden">
           Address or search

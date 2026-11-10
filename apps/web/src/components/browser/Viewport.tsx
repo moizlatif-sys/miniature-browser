@@ -1,32 +1,33 @@
 'use client';
 
-import type { Page } from '@/features/navigation/useBrowser';
+import type { Entry } from '@/features/navigation/reducer';
 import { PageFrame } from './PageFrame';
 
 interface Props {
-  page: Page | null;
+  entry: Entry | null;
   loading: string | null;
   onNavigate: (input: string) => void;
   onBlocked: (target: string) => void;
-  onScroll: (y: number) => void;
+  onScroll: (entryId: string, y: number) => void;
 }
 
-export function Viewport({ page, loading, onNavigate, onBlocked, onScroll }: Props) {
+export function Viewport({ entry, loading, onNavigate, onBlocked, onScroll }: Props) {
   return (
     <main className="viewport" aria-busy={!!loading}>
       {loading && <div className="loading-bar" role="status">Loading {loading}…</div>}
-      {!page && <StartScreen onNavigate={onNavigate} />}
-      {page?.kind === 'missing' && <MissingPage address={page.address} />}
-      {page?.kind === 'site' && (
+      {!entry && <StartScreen onNavigate={onNavigate} />}
+      {entry?.kind === 'missing' && <MissingPage address={entry.address} />}
+      {entry?.kind === 'site' && (
         <PageFrame
-          key={page.id}
-          title={page.site.title}
-          safeHtml={page.site.safeHtml}
-          restoreY={null}
-          fragment={page.fragment}
+          // A new frame per entry: going back mounts a fresh frame and restores its saved scroll.
+          key={entry.id}
+          title={entry.site.title}
+          safeHtml={entry.site.safeHtml}
+          restoreY={entry.scrollY}
+          fragment={entry.fragment}
           onNavigate={onNavigate}
           onBlocked={onBlocked}
-          onScroll={onScroll}
+          onScroll={(y) => onScroll(entry.id, y)}
         />
       )}
     </main>
