@@ -1,3 +1,5 @@
+import { Browser } from '@/components/browser/Browser';
+
 export default function Home() {
-  return <main style={{ padding: 24 }}>Miniature Browser — scaffold</main>;
+  return <Browser />;
 }
